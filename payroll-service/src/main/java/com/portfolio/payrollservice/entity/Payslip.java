@@ -32,4 +32,6 @@ public class Payslip {
     private BigDecimal deductions;
     private BigDecimal netSalary;
     private LocalDateTime generatedAt;
+    private Long unpaidLeaveDays;
+    private BigDecimal unpaidLeaveDeducation;
 }

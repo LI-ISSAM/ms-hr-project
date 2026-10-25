@@ -3,6 +3,7 @@ package com.portfolio.leaveservice.service;
 import com.portfolio.leaveservice.client.EmployeeClient;
 import com.portfolio.leaveservice.entity.LeaveRequest;
 import com.portfolio.leaveservice.entity.LeaveStatus;
+import com.portfolio.leaveservice.entity.LeaveType;
 import com.portfolio.leaveservice.repository.LeaveRequestRepository;
 import feign.FeignException;
 import lombok.RequiredArgsConstructor;
@@ -10,6 +11,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDate;
+import java.time.YearMonth;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 @Service
 @RequiredArgsConstructor
@@ -53,6 +57,25 @@ public class LeaveService {
         }
         req.setStatus(newStatus);
         return repo.save(req);
+    }
+
+    public long countUnpaidDays(Long employeeId , int month, int year){
+        if(month < 1 || month > 12){
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"month must be 1...12");
+        }
+
+        YearMonth ym = YearMonth.of(year,month);
+        LocalDate monthStart = ym.atDay(1);
+        LocalDate monthEnd = ym.atEndOfMonth();
+
+        return repo.findByEmployeeIdAndTypeAndStatus(employeeId, LeaveType.UNPAID, LeaveStatus.APPROVED)
+                .stream()
+                .mapToLong(l -> {
+                    LocalDate from = l.getStartDate().isAfter(monthStart) ? l.getStartDate() : monthStart;
+                    LocalDate to = l.getEndDate().isBefore(monthEnd) ? l.getEndDate() : monthEnd;
+                    return from.isAfter(to) ? 0 : ChronoUnit.DAYS.between(from, to) + 1;
+                })
+                .sum();
     }
 
     private void checkEmployeeExists(Long employeeId) {

@@ -2,6 +2,7 @@ package com.portfolio.payrollservice.service;
 
 import com.portfolio.payrollservice.client.EmployeeClient;
 import com.portfolio.payrollservice.client.EmployeeDto;
+import com.portfolio.payrollservice.client.LeaveClient;
 import com.portfolio.payrollservice.entity.Payslip;
 import com.portfolio.payrollservice.repository.PayslipRepository;
 import feign.FeignException;
@@ -12,6 +13,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.util.List;
 
 @Service
@@ -22,6 +24,7 @@ public class PayrollService {
     private final EmployeeClient employeeClient;
 
     private final PayslipRepository repo;
+    private final LeaveClient leaveClient;
 
     public List<Payslip> findAll() {
         return repo.findAll();
@@ -44,11 +47,16 @@ public class PayrollService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Payslip already generated");
         }
 
-        EmployeeDto emp = fetchEmployee(employeeId);
+        EmployeeDto emp = fetchEmployee(employeeId); //appel Feign de employee
+        long unpaidDays = fetchUnpaidDays(employeeId, month, year); // appel Feign de Leave
 
         BigDecimal base = emp.baseSalary();
         BigDecimal b = (bonus == null) ? BigDecimal.ZERO : bonus;
-        BigDecimal gross = base.add(b);
+        int daysInMonth = YearMonth.of(year,month).lengthOfMonth();
+        BigDecimal unpaidDeduction = base
+                .multiply(BigDecimal.valueOf(unpaidDays))
+                .divide(BigDecimal.valueOf(daysInMonth), 2, RoundingMode.HALF_UP);
+        BigDecimal gross = base.subtract(unpaidDeduction).add(b);
         BigDecimal deductions = gross.multiply(DEDUCTION_RATE).setScale(2, RoundingMode.HALF_UP);
         BigDecimal net = gross.subtract(deductions);
 
@@ -58,6 +66,8 @@ public class PayrollService {
         p.setYear(year);
         p.setBaseSalary(base);
         p.setBonus(b);
+        p.setUnpaidLeaveDays(unpaidDays);
+        p.setUnpaidLeaveDeducation(unpaidDeduction);
         p.setDeductions(deductions);
         p.setNetSalary(net);
         p.setGeneratedAt(LocalDateTime.now());
@@ -71,6 +81,14 @@ public class PayrollService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Employee not found: " + employeeId);
         } catch (FeignException e) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Employee service unavailable");
+        }
+    }
+
+    private long fetchUnpaidDays(Long employeeId, int month, int year){
+        try{
+            return leaveClient.getUnpaidDays(employeeId,month,year).unpaidDays();
+        }catch(FeignException e){
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,"Leave service unvailable");
         }
     }
 }

@@ -3,10 +3,12 @@ package com.portfolio.leaveservice.repository;
 
 import com.portfolio.leaveservice.entity.LeaveRequest;
 import com.portfolio.leaveservice.entity.LeaveStatus;
+import com.portfolio.leaveservice.entity.LeaveType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
 
 public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, Long> {
     List<LeaveRequest> findByEmployeeId(Long employeeId);
     List<LeaveRequest> findByStatus(LeaveStatus status);
+    List<LeaveRequest> findByEmployeeIdAndTypeAndStatus(Long employeeId, LeaveType type, LeaveStatus status);
 }

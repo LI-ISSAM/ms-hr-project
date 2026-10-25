@@ -1,6 +1,7 @@
 package com.portfolio.leaveservice.controller;
 
 
+import com.portfolio.leaveservice.client.UnpaidDaysDto;
 import com.portfolio.leaveservice.entity.LeaveRequest;
 import com.portfolio.leaveservice.entity.LeaveStatus;
 import com.portfolio.leaveservice.service.LeaveService;
@@ -35,6 +36,16 @@ public class LeaveController {
     @GetMapping("/status/{status}")
     public List<LeaveRequest> byStatus(@PathVariable LeaveStatus status) {
         return service.findByStatus(status);
+    }
+
+    @GetMapping("/employee/{employeeId}/unpaid-days")
+    public UnpaidDaysDto unpaidDays(@PathVariable Long employeeId,
+                                    @RequestParam int month,
+                                    @RequestParam int year
+                                    ){
+        return new UnpaidDaysDto(employeeId,month,year,
+                service.countUnpaidDays(employeeId,month,year)
+                );
     }
 
     @PostMapping
