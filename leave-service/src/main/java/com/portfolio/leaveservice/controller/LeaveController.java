@@ -54,6 +54,9 @@ public class LeaveController {
         return service.create(req);
     }
 
+    @PutMapping("/{id}")
+    @ResponseStatus(HttpStatus.CREATED)
+    public LeaveRequest update(@PathVariable Long id,@RequestBody LeaveRequest req) {return service.update(id,req);}
     @PutMapping("/{id}/approve")
     public LeaveRequest approve(@PathVariable Long id) {
         return service.changeStatus(id, LeaveStatus.APPROVED);
