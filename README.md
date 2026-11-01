@@ -91,7 +91,7 @@ La publication n'utilise pas de confirmations (*publisher confirms*) : le retour
 
 ## Diagramme de classes
 
-![Diagramme de classes V5](classeV5.png)
+![Diagramme de classes V5](classeV5_async.png)
 
 Chaque service suit la même organisation en couches :
 
