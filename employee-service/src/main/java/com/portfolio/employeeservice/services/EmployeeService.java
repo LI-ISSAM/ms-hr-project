@@ -1,6 +1,7 @@
 package com.portfolio.employeeservice.services;
 
 
+import com.portfolio.employeeservice.dto.CreationResult;
 import com.portfolio.employeeservice.entity.Department;
 import com.portfolio.employeeservice.entity.Employee;
 import com.portfolio.employeeservice.repository.EmployeeRepository;
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -24,12 +26,21 @@ public class EmployeeService {
                 new ResponseStatusException(HttpStatus.NOT_FOUND, "Employee not found: " + id));
     }
 
-    public Employee create(Employee e) {
-        if (repo.existsByEmail(e.getEmail()))
+    public CreationResult<Employee> create(Employee e, String idempotencyKey) {
+        if (idempotencyKey == null || idempotencyKey.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Idempotency-Key header is required");
+        }
+        Optional<Employee> existing = repo.findByIdempotencyKey(idempotencyKey);
+        if (existing.isPresent()) {
+            return new CreationResult<>(existing.get(), false);
+        }
+        if (repo.existsByEmail(e.getEmail())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already used");
+        }
         e.setId(null);
+        e.setIdempotencyKey(idempotencyKey);
         attachDepartment(e);
-        return repo.save(e);
+        return new CreationResult<>(repo.save(e), true);
     }
 
     public Employee update(Long id, Employee e) {

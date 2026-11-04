@@ -2,11 +2,13 @@ package com.portfolio.leaveservice.controller;
 
 
 import com.portfolio.leaveservice.client.UnpaidDaysDto;
+import com.portfolio.leaveservice.dto.CreationResult;
 import com.portfolio.leaveservice.entity.LeaveRequest;
 import com.portfolio.leaveservice.entity.LeaveStatus;
 import com.portfolio.leaveservice.service.LeaveService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -49,11 +51,13 @@ public class LeaveController {
     }
 
     @PostMapping
-    @ResponseStatus(HttpStatus.CREATED)
-    public LeaveRequest create(@RequestBody LeaveRequest req) {
-        return service.create(req);
+    public ResponseEntity<LeaveRequest> create(@RequestHeader("Idempotency-Key") String idempotencyKey,
+                                               @RequestBody LeaveRequest req) {
+        CreationResult<LeaveRequest> result = service.create(req, idempotencyKey);
+        return ResponseEntity.status(result.created() ? HttpStatus.CREATED : HttpStatus.OK)
+                .header("Idempotent-Replayed", String.valueOf(!result.created()))
+                .body(result.value());
     }
-
     @PutMapping("/{id}")
     @ResponseStatus(HttpStatus.CREATED)
     public LeaveRequest update(@PathVariable Long id,@RequestBody LeaveRequest req) {return service.update(id,req);}

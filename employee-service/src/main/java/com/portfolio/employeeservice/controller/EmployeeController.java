@@ -1,9 +1,11 @@
 package com.portfolio.employeeservice.controller;
 
+import com.portfolio.employeeservice.dto.CreationResult;
 import com.portfolio.employeeservice.entity.Employee;
 import com.portfolio.employeeservice.services.EmployeeService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
@@ -22,9 +24,14 @@ public class EmployeeController {
         return service.findByDepartment(departmentId);
     }
 
-    @PostMapping @ResponseStatus(HttpStatus.CREATED)
-    public Employee create(@RequestBody Employee e) { return service.create(e); }
-
+    @PostMapping
+    public ResponseEntity<Employee> create(@RequestHeader("Idempotency-Key") String idempotencyKey,
+                                           @RequestBody Employee e) {
+        CreationResult<Employee> result = service.create(e, idempotencyKey);
+        return ResponseEntity.status(result.created() ? HttpStatus.CREATED : HttpStatus.OK)
+                .header("Idempotent-Replayed", String.valueOf(!result.created()))
+                .body(result.value());
+    }
     @PutMapping("/{id}")
     public Employee update(@PathVariable Long id, @RequestBody Employee e) { return service.update(id, e); }
 

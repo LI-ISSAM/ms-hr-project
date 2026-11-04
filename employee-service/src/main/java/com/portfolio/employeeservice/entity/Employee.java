@@ -20,6 +20,9 @@ public class Employee {
     @Column(nullable = false, unique = true)
     private String email;
 
+    @Column(unique = true,length =100)
+    private String idempotencyKey;
+
     private String position;
 
     @Column(nullable = false)

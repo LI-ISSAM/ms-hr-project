@@ -20,6 +20,9 @@ public class LeaveRequest {
     @Column(nullable = false)
     private LocalDate endDate;
 
+    @Column(unique=true,length = 100)
+    private String idempotencyKey;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private LeaveType type;

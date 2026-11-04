@@ -1,0 +1,131 @@
+# Environnement de DÉPLOIEMENT (lancé par Jenkins).
+# Distinct de l'environnement de développement (IntelliJ) : ports différents.
+name: hr-platform
+
+x-spring-env: &spring-env
+  SPRING_PROFILES_ACTIVE: docker
+  SPRING_CONFIG_IMPORT: "configserver:http://config-server:8888"
+  JAVA_TOOL_OPTIONS: "-Xmx256m"
+
+services:
+
+  # ---------------- Infrastructure ----------------
+  postgres:
+    build: ./docker/postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  rabbitmq:
+    image: rabbitmq:4-management
+    environment:
+      RABBITMQ_DEFAULT_USER: tp
+      RABBITMQ_DEFAULT_PASS: tp123
+    ports:
+      - "15673:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+
+  mailpit:
+    image: axllent/mailpit
+    ports:
+      - "8026:8025"
+
+  redis:
+    image: redis:7
+
+  # ---------------- Services Spring Cloud ----------------
+  discovery-server:
+    image: hr/discovery-server:${TAG:-latest}
+    environment:
+      JAVA_TOOL_OPTIONS: "-Xmx256m"
+    ports:
+      - "8762:8761"
+    restart: on-failure
+
+  config-server:
+    image: hr/config-server:${TAG:-latest}
+    environment:
+      JAVA_TOOL_OPTIONS: "-Xmx256m"
+    restart: on-failure
+
+  # ---------------- Services métier ----------------
+  employee-service:
+    image: hr/employee-service:${TAG:-latest}
+    environment: *spring-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      config-server:
+        condition: service_started
+      discovery-server:
+        condition: service_started
+    restart: on-failure
+
+  leave-service:
+    image: hr/leave-service:${TAG:-latest}
+    environment: *spring-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      config-server:
+        condition: service_started
+      discovery-server:
+        condition: service_started
+    restart: on-failure
+
+  payroll-service:
+    image: hr/payroll-service:${TAG:-latest}
+    environment: *spring-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      config-server:
+        condition: service_started
+      discovery-server:
+        condition: service_started
+    restart: on-failure
+
+  notification-service:
+    image: hr/notification-service:${TAG:-latest}
+    environment: *spring-env
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+      config-server:
+        condition: service_started
+    restart: on-failure
+
+  # ---------------- Point d'entrée ----------------
+  api-gateway:
+    image: hr/api-gateway:${TAG:-latest}
+    ports:
+      - "8000:8080"
+    environment:
+      JAVA_TOOL_OPTIONS: "-Xmx256m"
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: "http://discovery-server:8761/eureka/"
+      EUREKA_INSTANCE_PREFERIPADDRESS: "true"
+      SPRING_DATA_REDIS_HOST: redis
+    depends_on:
+      - discovery-server
+      - redis
+    restart: on-failure
+
+volumes:
+  pgdata:

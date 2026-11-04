@@ -1,9 +1,11 @@
 package com.portfolio.payrollservice.controller;
 
+import com.portfolio.payrollservice.dto.CreationResult;
 import com.portfolio.payrollservice.entity.Payslip;
 import com.portfolio.payrollservice.service.PayrollService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.math.BigDecimal;
 import java.util.List;
@@ -31,11 +33,14 @@ public class PayrollController {
     }
 
     @PostMapping("/generate")
-    @ResponseStatus(HttpStatus.CREATED)
-    public Payslip generate(@RequestParam Long employeeId,
-                            @RequestParam int month,
-                            @RequestParam int year,
-                            @RequestParam(required = false) BigDecimal bonus) {
-        return service.generate(employeeId, month, year, bonus);
+    public ResponseEntity<Payslip> generate(@RequestHeader("Idempotency-Key") String idempotencyKey,
+                                            @RequestParam Long employeeId,
+                                            @RequestParam int month,
+                                            @RequestParam int year,
+                                            @RequestParam(required = false) BigDecimal bonus) {
+        CreationResult<Payslip> result = service.generate(employeeId, month, year, bonus, idempotencyKey);
+        return ResponseEntity.status(result.created() ? HttpStatus.CREATED : HttpStatus.OK)
+                .header("Idempotent-Replayed", String.valueOf(!result.created()))
+                .body(result.value());
     }
 }

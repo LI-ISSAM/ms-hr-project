@@ -26,6 +26,8 @@ public class Payslip {
 
     @Column(nullable = false)
     private int year;
+    @Column(unique = true , length=100)
+    private String idempotencyKey;
 
     private BigDecimal baseSalary;
     private BigDecimal bonus;
