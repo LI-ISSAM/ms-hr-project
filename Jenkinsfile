@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     tools {
-        maven 'Maven3'            // nom défini dans Manage Jenkins > Tools
+        maven 'Maven3'
     }
 
     options {
@@ -13,7 +13,7 @@ pipeline {
     }
 
     triggers {
-        pollSCM('H/2 * * * *')    // interroge GitHub toutes les ~2 minutes
+        pollSCM('H/2 * * * *')
     }
 
     environment {
@@ -24,10 +24,48 @@ pipeline {
 
     stages {
 
+        // Base PostgreSQL dédiée aux tests ------------------------------
+        stage('Start test DB') {
+            steps {
+                sh '''
+                    docker compose up -d postgres
+                    until docker compose exec -T postgres pg_isready -U postgres; do
+                        echo "Attente de PostgreSQL..."; sleep 2
+                    done
+                    for db in employee_test leave_test payroll_test; do
+                        docker compose exec -T postgres psql -U postgres -c "CREATE DATABASE $db" || true
+                    done
+                '''
+            }
+        }
+
         // CI -------------------------------------------------------------
         stage('Build & Test') {
             steps {
-                sh 'mvn -B -ntp clean verify'
+                sh '''
+                    set -e
+                    PG=jdbc:postgresql://host.docker.internal:5433
+                    NOCLOUD="-Dspring.cloud.config.enabled=false -Dspring.cloud.discovery.enabled=false -Deureka.client.enabled=false"
+
+                    # 1) Serveurs d'infrastructure (pas de base de données)
+                    mvn -B -ntp clean verify -pl discovery-server,config-server -am
+
+                    # 2) Gateway et notification (sans base, sans config-server ni Eureka)
+                    mvn -B -ntp verify -pl api-gateway,notification-service -am $NOCLOUD
+
+                    # 3) Services métier : une base de test par service
+                    for pair in employee-service:employee_test leave-service:leave_test payroll-service:payroll_test; do
+                        module=${pair%%:*}
+                        db=${pair##*:}
+                        echo "=== Tests $module sur $db ==="
+                        mvn -B -ntp verify -pl $module -am $NOCLOUD \
+                            -Dspring.datasource.url=$PG/$db \
+                            -Dspring.datasource.username=postgres \
+                            -Dspring.datasource.password=postgres \
+                            -Dspring.datasource.driver-class-name=org.postgresql.Driver \
+                            -Dspring.jpa.hibernate.ddl-auto=update
+                    done
+                '''
             }
             post {
                 always {
