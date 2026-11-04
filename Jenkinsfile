@@ -24,16 +24,21 @@ pipeline {
 
     stages {
 
-        // Base PostgreSQL dédiée aux tests ------------------------------
+        // Postgres jetable pour les tests (indépendant du compose) --------
         stage('Start test DB') {
             steps {
                 sh '''
-                    docker compose up -d postgres
-                    until docker compose exec -T postgres pg_isready -U postgres; do
+                    docker rm -f pg-test || true
+                    docker run -d --name pg-test \
+                        -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres \
+                        -p 5434:5432 postgres:16
+
+                    until docker exec pg-test pg_isready -U postgres; do
                         echo "Attente de PostgreSQL..."; sleep 2
                     done
+
                     for db in employee_test leave_test payroll_test; do
-                        docker compose exec -T postgres psql -U postgres -c "CREATE DATABASE $db" || true
+                        docker exec pg-test psql -U postgres -c "CREATE DATABASE $db" || true
                     done
                 '''
             }
@@ -44,7 +49,7 @@ pipeline {
             steps {
                 sh '''
                     set -e
-                    PG=jdbc:postgresql://host.docker.internal:5433
+                    PG=jdbc:postgresql://host.docker.internal:5434
                     NOCLOUD="-Dspring.cloud.config.enabled=false -Dspring.cloud.discovery.enabled=false -Deureka.client.enabled=false"
 
                     # 1) Serveurs d'infrastructure (pas de base de données)
@@ -125,6 +130,9 @@ pipeline {
     }
 
     post {
+        always {
+            sh 'docker rm -f pg-test || true'
+        }
         success {
             echo "Build ${env.BUILD_NUMBER} OK. Application : http://localhost:8000"
         }
